@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
+</head>
+<body>
+	<div id="user"></div>
+	<div id="business"></div>
+	<script>
+		
+		class GetData extends XMLHttpRequest{
+
+			constructor(endpoint) {
+				super();
+				this.ep = endpoint;
+			}
+
+			promise() {
+				return new Promise((resolve, reject) => {
+					this.exec(resolve,reject)
+				})
+			}
+
+			exec(resolve,reject) {
+				console.log()
+				this.open("GET",location.origin+this.ep, true);
+				this.send();
+
+				this.onload = (e) => {
+					resolve(this.response);
+				};
+
+				this.onerror = () => {
+					reject(this.response)
+				}
+			}
+
+			then(succes,fail) {
+				return this.promise().then(succes,fail);
+			};
+
+			catch(fail) {
+				return this.promise().catch(fail);
+			}
+
+		}
+
+
+		const user = new GetData("/api/get/user"+location.search);
+		const business = new GetData("/api/get/business?id=0");
+
+		const buildUser = (d) => {
+			const user = document.querySelector("#user");
+			let template = `
+				<div id="name">
+					${d.name}
+				</div>
+				<div id="skills">
+					${d.skills.map(s => {
+						return `<p>${s}</p>`
+					}).join("")}
+				</div>
+			`;
+
+			user.innerHTML = template;
+		}
+
+		const buildBusiness = (d) => {
+			const business = document.querySelector("#business");
+			const btnDislike = document.createElement("button");
+			const btnLike = document.createElement("button");
+
+			btnLike.innerHTML = "like";
+			btnDislike.innerHTML = "dislike";
+			const uid = location.search.replace("?id=","");
+			const bid = d.id;
+
+			const div = document.createElement("div");
+
+			
+
+			btnLike.onclick = () => {
+				const xhr = new XMLHttpRequest();
+				const url = location.origin+"/api/post/likeBusiness";
+				const params = "?uid="+uid+"&bid="+bid;
+
+				console.log(params)
+
+				xhr.open("POST",url+params,true)
+				xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+				xhr.onload = (e) => {
+					console.log(xhr)
+				}
+				xhr.send();
+			}
+			
+			div.appendChild(btnDislike)
+			div.appendChild(btnLike)
+
+			business.appendChild(div)
+
+
+			console.log(uid);
+		}
+
+
+		user.then((d) => {
+			return JSON.parse(d)
+		}).then(buildUser);
+
+		business.then(d => {
+			return JSON.parse(d)
+		}).then(buildBusiness)
+
+		const socket = io.connect(location.origin+"/user/"+location.search.replace("?id=",""))
+	</script>
+</body>
+</html>

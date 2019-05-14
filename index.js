@@ -17,6 +17,20 @@ class BusinessSocket{
 	};
 };
 
+class UserSocket{
+	constructor(id,name) {
+		this.id = id;
+		this.name = name;
+		this.ns = io.of("/user/"+this.id);
+
+		
+	};
+
+	notify(u) {
+		this.ns.emit("businessLike",u)
+	};
+};
+
 const user = [
 	{
 		id:0,
@@ -42,6 +56,7 @@ const business = [
 
 
 const businessObserver = new Observer();
+const userObserver = new Observer();
 
 
 for(let i = 0; i < business.length; i++) {
@@ -49,7 +64,9 @@ for(let i = 0; i < business.length; i++) {
 };
 
 
-console.log(businessObserver.observers[0].ns)
+for(let i = 0; i < user.length; i++) {
+	userObserver.subscribe(new UserSocket(user[i].id,user[i].name));
+};
 
 
 const likes = [];
@@ -113,13 +130,15 @@ const newBusiness = (uid,bid,cb) => {
 };
 
 app.get("/user", (req,res) => {
-	const id =+ req.query.id;
+	let id =+ req.query.id;
+
+	id = parseInt(id);
 	const singleUser = user.find(i => {
 		return i.id === id;
 	}) 
 
 	if(singleUser) {
-		res.send(JSON.stringify(singleUser));
+		res.sendfile(__dirname+"/static/user.html");
 	}else {
 		res.send("user not found biatch")
 	}
@@ -138,6 +157,25 @@ app.get("/business", (req,res) => {
 	}
 });
 
+
+app.get("/api/get/user", (req,res) => {
+	let {id} = req.query;
+	id = parseInt(id);
+	const singleUser = user.find(i => {
+		return i.id === id;
+	});
+
+	res.send(JSON.stringify(singleUser));
+});
+
+app.get("/api/get/business", (req,res) => {
+	let {id} = req.query;
+	id = parseInt(id);
+	const singleUser = business.find(i => {
+		return i.id === id;
+	});
+	res.send(JSON.stringify(singleUser));
+});
 
 app.post("/api/post/likeBusiness", (req,res) => {
 
