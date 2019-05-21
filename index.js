@@ -1,19 +1,61 @@
-const app = require("express")();
+const express = require("express");
+const app = express();
 const server = require("http").Server(app);
 const io = require("socket.io")(server);
 const Observer = require("./bin/Observer.js");
+
+app.use(express.static("static"));
+
 
 class BusinessSocket{
 	constructor(id,name) {
 		this.id = id;
 		this.name = name;
 		this.ns = io.of("/business/"+this.id);
+		console.log("hi",this.id)
+		this.ns.on("connect", (s) => {
+			s.on("match",d => {
+				match.push({
+					id: match[match.length-1] ? match[match.length-1].id+1 : 0,
+					business_id: this.id,
+					user_id: d.userId
+				});
 
-		
+				const foundMatch = match.find(i => {
+					return i.business_id === this.id && i.user_id === d.userId
+				});
+
+				const matchUser = userObserver.observers.find(u => {
+					return u.id === d.userId
+				})
+
+				
+				if(!matchSockets.find(i =>{return i.id === foundMatch.id})) {
+					matchSockets.push(new MatchSocket(foundMatch.id));
+				}
+				
+				this.ns.emit("newmatch",{id:foundMatch.id,user: user.find(u =>{return u.id === d.userId})});
+				matchUser.match({id:foundMatch.id,business:business.find(b =>{return b.id === this.id})});
+			});
+		});
 	};
 
 	notify(u) {
 		this.ns.emit("userLike",u)
+	};
+};
+
+class MatchSocket {
+	constructor(id) {
+		this.id = id;
+		this.ns = io.of("/match/"+this.id);
+
+		this.ns.on("connect", socket => {
+			console.log("new connection")
+			socket.on("message", message => {
+				socket.broadcast.emit("message", message);
+			});
+		});
 	};
 };
 
@@ -25,6 +67,10 @@ class UserSocket{
 
 		
 	};
+
+	match(m) {
+		this.ns.emit("newmatch",m)
+	}
 
 	notify(u) {
 		this.ns.emit("businessLike",u)
@@ -54,6 +100,9 @@ const business = [
 	}
 ]
 
+const match = [];
+
+const matchSockets = [];
 
 const businessObserver = new Observer();
 const userObserver = new Observer();
@@ -77,7 +126,6 @@ const likeBusiness = (uid,bid) => {
 		id: likes[likes.length-1] ? likes[likes.length-1].id+1 : 0,
 		uid:uid,
 		bid:bid,
-		approved: false
 	} 
 	likes.push(obj);
 }
@@ -124,7 +172,7 @@ const newBusiness = (uid,bid,cb) => {
 			cb(business[i]);
 			break;
 		}else if(i === business.length - 1) {
-			cb("out of business");
+			cb({status:null});
 		};
 	};
 };
@@ -178,19 +226,13 @@ app.get("/api/get/business", (req,res) => {
 });
 
 app.post("/api/post/likeBusiness", (req,res) => {
-
-	
 	let {uid,bid} = req.query;
-
 	uid = parseInt(uid)
 	bid = parseInt(bid)
-
 	const userLiked = user.find(i => {
 		return i.id === uid;
 	})
-	
 	businessObserver.notify(bid,userLiked);
-
 	likeBusiness(uid,bid);
 	newBusiness(uid,bid,(m) => {
 		res.send(JSON.stringify(m));
@@ -211,5 +253,5 @@ app.post("/api/post/dislikeBusiness", (req,res) => {
 
 
 server.listen(9000, () => {
-	
+	console.log("running")
 });

@@ -4,10 +4,179 @@
 	<meta charset="UTF-8">
 	<title>Document</title>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
+	<link href="https://fonts.googleapis.com/css?family=Playfair+Display:400,400i,700,700i,900,900i&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/style.css">
 </head>
 <body>
+	<h1>Match Heroes</h1>
+
+	<div id="wrapper">
+		<div id="like-container">
+			<h1>Likes</h1>
+			<div id="likes">
+			</div>
+		</div>
+		<div id="match-container">
+			<h1>Matches</h1>
+			<div id="matches">
+			</div>
+		</div>
+		<div id="chat"></div>
+	</div>
+	
+	
+	
 	<script>
-		const socket = io.connect(location.origin+"/business/"+location.search.replace("?id=",""))
+		const socket = io.connect(location.origin+"/business/"+location.search.replace("?id=",""));
+
+		const constructTimeStamp = function() {
+			const date = new Date();
+			let hour = date.getHours();
+			let minutes = date.getMinutes();
+
+			if(minutes < 10) {
+				minutes = "0"+minutes;
+			}
+
+			if(hour < 10) {
+				hour = "0"+minutes;
+			}
+
+			return hour+":"+minutes
+		}
+
+		class MatchNS{
+			constructor(id) {
+				this.id = id;
+				this.ns = io.connect(location.origin+"/match/"+this.id);
+				this.chatbox = null;
+				this.ns.on("message",this.receive.bind(this));
+			}
+
+			send(m){
+				this.ns.emit("message", m);
+			};
+			receive(message) {
+				const template = 
+				`
+					<div class="other">
+						<div class="message-wrap">
+							<p class="message">${message}</p>
+						</div>
+						<p class="time">${constructTimeStamp()}</p>
+					</div>
+				`;
+
+				this.chatbox.insertAdjacentHTML("beforeend",template)
+
+			}
+		};
+
+		const constructMatch = (id,m) => {
+			const target = document.querySelector("#matches");
+
+			const template = `
+				<div id="match_${id}" class="match">
+					<div class="head">
+						<h1>
+							${m.name}	
+						</h1>
+					</div>
+					<div class="colapsable hidden">
+						<div class="skills">
+							${
+								m.skills.map(s=> {
+									return `<p>${s}</p>`;
+								}).join("")
+							}
+						</div>
+						<div class="chat">
+							<div class="chat-view"></div>
+							<div class="chat-ui">
+								
+								<textarea></textarea>
+								<button class="chat-btn">Verstuur</button>
+							</div>
+							
+						</div>
+					</div>
+				</div>
+			`;
+			target.innerHTML = template;
+			const container = document.querySelector("#match_"+id);
+			container.ns = new MatchNS(id);
+			const button = container.querySelector(".chat-btn");
+			const input = container.querySelector("textarea");
+			const view = container.querySelector(".chat-view");
+			container.ns.chatbox = view;
+			container.inChat = false;
+			container.onclick = function() {
+				if(!this.inChat) {
+					const chat = document.querySelector("#chat");
+					container.querySelector(".colapsable").classList.remove("hidden");
+					chat.appendChild(this);
+					this.inChat = true;
+				}
+				
+			}
+			button.onclick = function() {
+				const val = input.value;
+				const message = `
+				<div class="self">
+					<div class="message-wrap">
+						<p class="message">${val}</p>
+					</div>
+					
+					<p class="time">${constructTimeStamp()}</p>
+				</div>
+				`;
+				view.insertAdjacentHTML("beforeend",message);
+				input.value = "";
+				container.ns.send(val);
+			}
+		}
+
+		const buildUser = function(d) {
+			const container = document.querySelector("#likes");
+			
+
+			const template = 
+			`
+				<div class="user" id="user_id_${d.id}">
+					<h1>${d.name}</h1>
+					<div class="skills">
+						${d.skills.map(s => {
+							return `<p>${s}</p>`
+						}).join("")}
+					</div>
+					<div class="btn-container">
+						<button class="button-dislike">Dislike</button>
+						<button class="button-like">Like</button>
+					</div>
+				</div>
+			`;
+
+
+
+
+			container.insertAdjacentHTML("afterbegin",template);
+
+			const userContainer = document.querySelector("#user_id_"+d.id);
+
+			const btnLike = userContainer.querySelector(".button-like");
+
+			btnLike.onclick = function() {
+				socket.emit("match",{userId:d.id});
+				container.removeChild(userContainer);
+			}
+		}
+
+		socket.on("userLike",u => {
+			buildUser(u);
+		})
+		socket.on("newmatch", m => {
+			constructMatch(m.id,m.user)
+		});
 	</script>
 </body>
 </html>

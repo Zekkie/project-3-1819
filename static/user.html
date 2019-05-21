@@ -4,10 +4,24 @@
 	<meta charset="UTF-8">
 	<title>Document</title>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.dev.js"></script>
+	<link href="https://fonts.googleapis.com/css?family=Playfair+Display:400,400i,700,700i,900,900i&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/style.css">
 </head>
 <body>
-	<div id="user"></div>
-	<div id="business"></div>
+	<h1>Match Heroes</h1>
+	<div id="wrapper">
+		
+		<div id="match-container">
+			<h1>Matches</h1>
+			<div id="matches"></div>
+		</div>
+		<div id="business-container">
+			<h1>Like your businesses</h1>
+			<div id="business"></div>
+		</div>
+		<div id="chat"></div>
+	</div>
+	
 	<script>
 		
 		class GetData extends XMLHttpRequest{
@@ -48,7 +62,7 @@
 		}
 
 
-		const user = new GetData("/api/get/user"+location.search);
+		//const user = new GetData("/api/get/user"+location.search);
 		const business = new GetData("/api/get/business?id=0");
 
 		const buildUser = (d) => {
@@ -69,52 +83,191 @@
 
 		const buildBusiness = (d) => {
 			const business = document.querySelector("#business");
-			const btnDislike = document.createElement("button");
-			const btnLike = document.createElement("button");
 
-			btnLike.innerHTML = "like";
-			btnDislike.innerHTML = "dislike";
+
+
 			const uid = location.search.replace("?id=","");
 			const bid = d.id;
 
-			const div = document.createElement("div");
+
+
+			const template = `
+				<div class="business">
+					<h1>${d.name}</h1>
+					<div class="card-ui">
+						<button class="button-dislike">Dislike</button>
+						<button class="button-like">Like</button>
+					</div>
+				</div>
+
+			`
 
 			
+		
+			business.innerHTML = template;
+			const card = document.querySelector(".business");
+			btnLike = card.querySelector(".button-like");
+			btnDislike = card.querySelector(".button-dislike");
 
 			btnLike.onclick = () => {
+				document.querySelector("#business").removeChild(document.querySelector("#business").children[0]);
 				const xhr = new XMLHttpRequest();
 				const url = location.origin+"/api/post/likeBusiness";
 				const params = "?uid="+uid+"&bid="+bid;
-
-				console.log(params)
-
 				xhr.open("POST",url+params,true)
 				xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 				xhr.onload = (e) => {
-					console.log(xhr)
+					const obj = JSON.parse(xhr.response);
+					if(obj.status === null) {
+						console.log("empty")
+					}else {
+						buildBusiness(obj);
+					};
+					
 				}
 				xhr.send();
 			}
-			
-			div.appendChild(btnDislike)
-			div.appendChild(btnLike)
-
-			business.appendChild(div)
-
-
-			console.log(uid);
+			btnDislike.onclick = () => {
+				document.querySelector("#business").removeChild(document.querySelector("#business").children[0]);
+				const xhr = new XMLHttpRequest();
+				const url = location.origin+"/api/post/dislikeBusiness";
+				const params = "?uid="+uid+"&bid="+bid;
+				xhr.open("POST",url+params,true)
+				xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+				xhr.onload = (e) => {
+					const obj = JSON.parse(xhr.response);
+					if(obj.status === null) {
+						console.log("empty")
+					}else {
+						buildBusiness(obj);
+					};
+				
+			}
+			xhr.send();
+			}
 		}
 
 
-		user.then((d) => {
-			return JSON.parse(d)
-		}).then(buildUser);
+		// user.then((d) => {
+		// 	return JSON.parse(d)
+		// }).then(buildUser);
 
 		business.then(d => {
 			return JSON.parse(d)
 		}).then(buildBusiness)
 
-		const socket = io.connect(location.origin+"/user/"+location.search.replace("?id=",""))
+		const socket = io.connect(location.origin+"/user/"+location.search.replace("?id=",""));
+
+		const constructTimeStamp = function() {
+				const date = new Date();
+			let hour = date.getHours();
+			let minutes = date.getMinutes();
+
+			if(minutes < 10) {
+				minutes = "0"+minutes;
+			}
+
+			if(hour < 10) {
+				hour = "0"+minutes;
+			}
+
+			return hour+":"+minutes
+
+		}
+
+		class MatchNS{
+			constructor(id) {
+				this.id = id;
+				this.ns = io.connect(location.origin+"/match/"+this.id);
+				this.chatbox = null;
+				this.ns.on("message",this.receive.bind(this));
+			}
+
+			send(m){
+				this.ns.emit("message", m);
+			};
+			receive(message) {
+				const template = 
+				`
+					<div class="other">
+						<div class="message-wrap">
+							<p class="message">${message}</p>
+						</div>
+						<p class="time">${constructTimeStamp()}</p>
+					</div>
+				`;
+
+				this.chatbox.insertAdjacentHTML("beforeend",template)
+
+			}
+		};
+
+		const constructMatch = (id,m) => {
+			const target = document.querySelector("#matches");
+
+			const template = `
+				<div id="match_${id}" class="match">
+					<div class="head">
+						<h1>
+							${m.name}	
+						</h1>
+					</div>
+					<div class="colapsable hidden">
+						<div class="chat">
+							<div class="chat-view"></div>
+							<div class="chat-ui">
+								<button class="chat-btn">Verstuur</button>
+								<textarea></textarea>
+							</div>
+							
+						</div>
+					</div>
+				</div>
+			`;
+
+			
+		
+			target.insertAdjacentHTML("afterbegin",template);
+			
+		
+
+			const container = document.querySelector("#match_"+id);
+			container.ns = new MatchNS(id);
+			const button = container.querySelector(".chat-btn");
+			const input = container.querySelector("textarea");
+			const view = container.querySelector(".chat-view");
+			container.ns.chatbox = view;
+			container.inChat = false
+			button.onclick = function() {
+				const val = input.value;
+				const message = `
+				<div class="self">
+					<div class="message-wrap">
+						<p class="message">${val}</p>
+					</div>
+					<p class="time">${constructTimeStamp()}</p>
+				</div>
+				`;
+				view.insertAdjacentHTML("beforeend",message);
+				container.ns.send(val);
+				input.value = ""
+			}
+
+
+			container.onclick = function() {
+				if(!this.inChat) {
+					const chat = document.querySelector("#chat");
+					container.querySelector(".colapsable").classList.remove("hidden");
+					chat.appendChild(this);
+					this.inChat = true;
+				}
+			}
+
+		}
+
+		socket.on("newmatch", m => {
+			constructMatch(m.id,m.business)
+		});
 	</script>
 </body>
 </html>
